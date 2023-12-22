@@ -59,8 +59,14 @@ io.on("connection", (socket)=>{
     socket.on("enter_room", (data)=>{
         console.log(`${socket.nickname}님이 ${data.enterRoom}방에 입장하셨습니다.`)
         socket.join(data.enterRoom);
-        io.to(data.enterRoom).emit("welcome", `환영합니다. ${socket.nickname}님이 입장하셨습니다.`);
-        // socket.broadcast.emit : 본인을 제외한 모두에게 broadcast
+        // socket.to(data.enterRoom).emit("welcome", `환영합니다. ${socket.nickname}님이 입장하셨습니다.`);
+        socket.to(data.enterRoom).emit("welcome", `환영합니다. ${socket.nickname}님이 입장하셨습니다.`, data.enterRoom);
+        // io.to(data.enterRoom).emit("welcome", `환영합니다. ${socket.nickname}님이 입장하셨습니다.`);
+
+        // socket.broadcast.emit : 나를 제외한 모두에게 broadcast
+        // io.emit : 모두에게 broadcast
+        // socket.to().emit : 나를 제외한 특정 방에 있는 사람에게 broadcast
+        // io.to().emit : 특정 방에 있는 모두에게 broadcast
         io.emit("public_rooms", publicRoom());
     });
 
@@ -81,6 +87,18 @@ io.on("connection", (socket)=>{
         socket.nickname = data.nickname;
         console.log(`${socket.nickname}님이 ${socket.nickname}으로 닉네임을 변경이 완료되었습니다.`)
     });
+
+    socket.on("offer", (data)=>{
+        console.log(data);
+        // 나를 제외한 사람에게 getOffer 보내기
+        socket.to(data.room).emit("getOffer", data.offer, data.room);
+    })
+
+    socket.on("answer", (data)=>{
+        console.log("answer");
+        console.log(data);
+        socket.to(data.room).emit("getAnswer", data.answer, data.room);
+    })
 });
 
 module.exports = {

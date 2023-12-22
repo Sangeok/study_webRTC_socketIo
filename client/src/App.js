@@ -15,6 +15,10 @@ function App() {
   const socketRef = useRef();
   const videoRef = useRef(null)
   const videoOffRef = useRef(false);
+  const streamRef = useRef(null);
+
+  const myPeer = new RTCPeerConnection();
+
 
   const handleRoomName = (e) => {
     setRoom(e.target.value);
@@ -79,9 +83,16 @@ function App() {
   useEffect(()=>{
     // if(effectForRef.current === false){
       const fetchWelcome = () => {
-        socketRef.current.on("welcome", (data)=>{
-          console.log(data);
+        socketRef.current.on("welcome", async (data, roomName)=>{
           setAllMessages((pre)=>[...pre, data]);
+
+          // 문제 1. 여기서 emit으로 offer를 보낼 때 room값이 없는 현상이 발생.
+          // createOffer(다른 브라우저가 참가할 수 있도록 함.)
+          const offer = await myPeer.createOffer();
+          myPeer.setLocalDescription(offer);
+          socketRef.current.emit("offer", {offer: offer, room: roomName});
+          console.log("send offer");
+          console.log(offer);
         });
       }
 
@@ -104,10 +115,46 @@ function App() {
         });
       }
 
+      const fetchOffer = () => {
+        socketRef.current.on("getOffer", async (offer, roomName)=>{
+          console.log("receive offer");
+          console.log(offer);
+
+          await myPeer.setRemoteDescription(offer);
+          // if (myPeer.signalingState === 'have-local-offer') {
+          //   try {
+          //     await myPeer.setRemoteDescription(data);
+          //   } catch (error) {
+          //     console.error('SDP 파싱 오류', error);
+          //   }
+          // } else {
+          //   console.log('have-local-offer 상태가 아님');
+          // }
+
+
+          // createAnswer
+          const answer = await myPeer.createAnswer();
+          myPeer.setLocalDescription(answer);
+          console.log("answer");
+          console.log(answer);
+          socketRef.current.emit("answer", {answer: answer, room: roomName});
+        });
+      }
+
+      const fetchAnswer = () => {
+        socketRef.current.on("getAnswer", async (answer)=>{
+          console.log("getAnswer");
+          console.log(answer);
+          await myPeer.setRemoteDescription(answer);
+        });
+      }
+
       fetchWelcome();
       fetchBye();
       fetchMessage();
       fetchPublicRooms(); 
+      fetchOffer();
+      fetchAnswer();
     // }
 
     // return () => { effectForRef.current = true };
@@ -117,15 +164,26 @@ function App() {
   useEffect(() => {
     const getUserMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        streamRef.current = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          videoRef.current.srcObject = streamRef.current;
         }
       } catch (err) {
         console.log(err);
       }
     };
+    const makeConnection = () => {
+      try {
+        streamRef.current.getTracks().forEach((track) => {
+          myPeer.addTrack(track, streamRef.current);
+        })
+        // myPeer
+      } catch (err) {
+        console.log(err);
+      } 
+    }
     getUserMedia();
+    makeConnection();
   }, [enterRoom]);
 
   console.log(videoRef.current);
