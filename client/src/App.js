@@ -9,8 +9,12 @@ function App() {
   const [enterRoom, setEnterRoom] = useState(false);
   const [allMessages, setAllMessages] = useState([]);
   const [publicRooms, setPublicRooms] = useState([]);
+  const [mute, setMute] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);  
 
   const socketRef = useRef();
+  const videoRef = useRef(null)
+  const videoOffRef = useRef(false);
 
   const handleRoomName = (e) => {
     setRoom(e.target.value);
@@ -52,17 +56,25 @@ function App() {
     setSendMessage(e.target.value);
   }
 
+  const handleMute = (e) => {
+    e.preventDefault();
+    videoRef.current.srcObject.getAudioTracks().forEach((tracks)=>tracks.enabled = !tracks.enabled);
+    setMute((pre)=>!pre);
+  }
+
+  const handleVideo = (e) => {
+    e.preventDefault();
+    videoRef.current.srcObject.getVideoTracks().forEach((tracks)=>tracks.enabled = !tracks.enabled);
+    setShowVideo((pre)=>!pre);
+  }
+
   useEffect(() => {
-    // Create the socket connection only once when the component mounts
     socketRef.current = io("http://localhost:3001");
 
-    // Set up event listeners or any other socket-related logic here
-
     return () => {
-      // Clean up the socket connection when the component is unmounted
       socketRef.current.disconnect();
     };
-  }, []); // Empty dependency array ensures this effect runs only once
+  }, []);
 
   useEffect(()=>{
     // if(effectForRef.current === false){
@@ -101,11 +113,31 @@ function App() {
     // return () => { effectForRef.current = true };
   },[socketRef]);
 
+  // video 부분이 있어야만 정확히 동작함.. 왜지..
+  useEffect(() => {
+    const getUserMedia = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    getUserMedia();
+  }, [enterRoom]);
+
+  console.log(videoRef.current);
+
   return (
     <div className="App">
       {
         enterRoom ? (
-        <div> 
+        <div>
+          {
+            console.log(videoRef.current)
+          }
           <h1>{room}</h1>
           <ul>
             {
@@ -134,6 +166,16 @@ function App() {
             />
             <button onClick={handleNickname}>닉네임 설정</button>
           </form>
+          {/* plasyInline : 비디오가 전체 화면이 되지 않도록 함. */}
+          <video
+            ref={videoRef}
+            autoPlay 
+            playsInline 
+            width="400" 
+            height="400"
+          />
+          <button onClick={handleMute}>{mute ? "Speak" : "Mute"}</button>
+          <button onClick={handleVideo}>{videoOffRef.current ? "Start Video" : "Stop Video"}</button>
         </div>
         ) : (
           <div>
