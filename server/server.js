@@ -99,6 +99,12 @@ io.on("connection", (socket)=>{
         console.log(data);
         socket.to(data.room).emit("getAnswer", data.answer, data.room);
     })
+
+    socket.on("ice", (data)=>{
+        console.log("ice");
+        console.log(data);
+        socket.to(data.room).emit("getIce", data.candidate);
+    })
 });
 
 module.exports = {

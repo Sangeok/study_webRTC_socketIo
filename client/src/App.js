@@ -17,7 +17,8 @@ function App() {
   const videoOffRef = useRef(false);
   const streamRef = useRef(null);
 
-  const myPeer = new RTCPeerConnection();
+  const myPeer = useRef(new RTCPeerConnection());
+  const remoteVideoRef = useRef(new RTCPeerConnection());
 
 
   const handleRoomName = (e) => {
@@ -88,8 +89,8 @@ function App() {
 
           // 문제 1. 여기서 emit으로 offer를 보낼 때 room값이 없는 현상이 발생.
           // createOffer(다른 브라우저가 참가할 수 있도록 함.)
-          const offer = await myPeer.createOffer();
-          myPeer.setLocalDescription(offer);
+          const offer = await myPeer.current.createOffer();
+          myPeer.current.setLocalDescription(offer);
           socketRef.current.emit("offer", {offer: offer, room: roomName});
           console.log("send offer");
           console.log(offer);
@@ -120,21 +121,11 @@ function App() {
           console.log("receive offer");
           console.log(offer);
 
-          await myPeer.setRemoteDescription(offer);
-          // if (myPeer.signalingState === 'have-local-offer') {
-          //   try {
-          //     await myPeer.setRemoteDescription(data);
-          //   } catch (error) {
-          //     console.error('SDP 파싱 오류', error);
-          //   }
-          // } else {
-          //   console.log('have-local-offer 상태가 아님');
-          // }
-
+          await myPeer.current.setRemoteDescription(offer);
 
           // createAnswer
-          const answer = await myPeer.createAnswer();
-          myPeer.setLocalDescription(answer);
+          const answer = await myPeer.current.createAnswer();
+          myPeer.current.setLocalDescription(answer);
           console.log("answer");
           console.log(answer);
           socketRef.current.emit("answer", {answer: answer, room: roomName});
@@ -145,7 +136,19 @@ function App() {
         socketRef.current.on("getAnswer", async (answer)=>{
           console.log("getAnswer");
           console.log(answer);
-          await myPeer.setRemoteDescription(answer);
+          await myPeer.current.setRemoteDescription(answer);
+        });
+      }
+
+      const fetchIce = () => {
+        socketRef.current.on("getIce", async (data)=>{
+          console.log("receive candidate");
+          console.log(data);
+          try {
+            await myPeer.current.addIceCandidate(data);
+          } catch (err) {
+            console.log(err);
+          }
         });
       }
 
@@ -155,6 +158,7 @@ function App() {
       fetchPublicRooms(); 
       fetchOffer();
       fetchAnswer();
+      fetchIce();
     // }
 
     // return () => { effectForRef.current = true };
@@ -175,9 +179,29 @@ function App() {
     const makeConnection = () => {
       try {
         streamRef.current.getTracks().forEach((track) => {
-          myPeer.addTrack(track, streamRef.current);
+          myPeer.current.addTrack(track, streamRef.current);
         })
-        // myPeer
+
+        // icecandidate : 서로 다른 네트워크 환경에서 통신할 수 있도록 함.
+        myPeer.current.onicecandidate = (event) => {
+          if (event.candidate) {
+            console.log("send candidate");
+            console.log(event);
+            socketRef.current.emit("ice", {candidate: event.candidate, room: room});
+          }
+        }
+
+         // 구 addStream 현 track 이벤트 
+         myPeer.current.ontrack = (data) => {
+          console.log("got remote stream");
+          console.log("Peers stream", data.streams);
+          console.log("my stream", streamRef.current);
+          if(remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = data.streams[0];
+          }
+        };   
+
+
       } catch (err) {
         console.log(err);
       } 
@@ -234,6 +258,14 @@ function App() {
           />
           <button onClick={handleMute}>{mute ? "Speak" : "Mute"}</button>
           <button onClick={handleVideo}>{videoOffRef.current ? "Start Video" : "Stop Video"}</button>
+
+          <video
+            ref={remoteVideoRef}
+            autoPlay 
+            playsInline 
+            width="400" 
+            height="400"
+          />
         </div>
         ) : (
           <div>
